@@ -1,9 +1,0 @@
-import {useEffect,useRef,useState} from 'react';
-import {getDocument,GlobalWorkerOptions,type PDFDocumentProxy,type RenderTask} from 'pdfjs-dist';
-GlobalWorkerOptions.workerSrc=new URL('pdfjs-dist/build/pdf.worker.min.mjs',import.meta.url).toString();
-type Props={blob:Blob;page:number;onLoaded:(doc:PDFDocumentProxy)=>void;onRendered:(page:number)=>void};
-export default function PdfReader({blob,page,onLoaded,onRendered}:Props){const canvasRef=useRef<HTMLCanvasElement>(null);const [doc,setDoc]=useState<PDFDocumentProxy|null>(null);const [busy,setBusy]=useState(true);const renderTask=useRef<RenderTask|null>(null);
- useEffect(()=>{let dead=false;setBusy(true);(async()=>{const data=new Uint8Array(await blob.arrayBuffer());const loaded=await getDocument({data}).promise;if(dead)return;setDoc(loaded);onLoaded(loaded);})();return()=>{dead=true;renderTask.current?.cancel();};},[blob,onLoaded]);
- useEffect(()=>{if(!doc||!canvasRef.current)return;let dead=false;renderTask.current?.cancel();setBusy(true);(async()=>{try{const pdfPage=await doc.getPage(page);const viewport=pdfPage.getViewport({scale:1.55});const buffer=document.createElement('canvas');buffer.width=Math.ceil(viewport.width);buffer.height=Math.ceil(viewport.height);const ctx=buffer.getContext('2d',{alpha:false});if(!ctx)return;renderTask.current=pdfPage.render({canvasContext:ctx,viewport,canvas:buffer});await renderTask.current.promise;if(dead)return;const canvas=canvasRef.current!;canvas.width=buffer.width;canvas.height=buffer.height;canvas.getContext('2d')!.drawImage(buffer,0,0);setBusy(false);onRendered(page);}catch(e){if((e as Error).name!=='RenderingCancelledException')setBusy(false);}})();return()=>{dead=true;renderTask.current?.cancel();};},[doc,page,onRendered]);
- return <div className="paper-stage" aria-busy={busy}><canvas ref={canvasRef} aria-label={`Halaman PDF ${page}`}/>{busy&&<div className="reader-busy">Membuka halaman…</div>}</div>;
-}
